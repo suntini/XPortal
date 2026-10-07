@@ -1,34 +1,47 @@
-name: Build DLL
+name: Build XPortal DLL
 
 on:
   push:
     branches: [ "main", "master" ]
   pull_request:
     branches: [ "main", "master" ]
-  workflow_dispatch: # 支持手动触发
+  workflow_dispatch: # 支持在 GitHub 页面上手动点击运行
 
 jobs:
   build:
-    runs-on: windows-latest # Windows 环境便于编译标准 DLL
+    runs-on: windows-latest
 
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
-    - name: Setup .NET
+    - name: Setup .NET SDK
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: '8.0.x' # 根据项目实际所需的 .NET SDK 版本调整
+        dotnet-version: '8.0.x'
 
-    - name: Restore dependencies
+    - name: Create Dummy Environment.props
+      shell: powershell
+      run: |
+        $propsContent = @"
+        <Project>
+          <PropertyGroup>
+            <VALHEIM_INSTALL>C:\DummyPath</VALHEIM_INSTALL>
+          </PropertyGroup>
+        </Project>
+        "@
+        $propsContent | Out-File -FilePath "Environment.props" -Encoding utf8
+
+    - name: Restore Dependencies
       run: dotnet restore
 
-    - name: Build Solution
-      run: dotnet build --configuration Release --no-restore
+    - name: Build Project DLL
+      run: dotnet build --configuration Release --no-restore /p:BuildingInsideGitHubActions=true
 
     - name: Upload DLL Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: XPortal-DLL
+        name: XPortal-Mod-DLL
         path: |
+          **/bin/Release/**/XPortal.dll
           **/bin/Release/**/*.dll
