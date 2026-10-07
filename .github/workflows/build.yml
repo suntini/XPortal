@@ -21,33 +21,44 @@ jobs:
     - name: Setup MSBuild
       uses: microsoft/setup-msbuild@v2
 
-    # 1. 模拟 Environment.props，避免缺失游戏安装目录导致报错
+    # 1. 创建 Dummy 环境变量文件
     - name: Create Dummy Environment.props
       shell: powershell
       run: |
         $propsContent = @"
         <Project>
           <PropertyGroup>
-            <VALHEIM_INSTALL>C:\DummyPath</VALHEIM_INSTALL>
+            <VALHEIM_INSTALL>$(Get-Location)\ValheimDummy</VALHEIM_INSTALL>
           </PropertyGroup>
         </Project>
         "@
         $propsContent | Out-File -FilePath "Environment.props" -Encoding utf8
 
-    # 2. 安装并解压 JotunnLib 到项目的 packages 目录下，确保 .props 和 .targets 文件到位
+    # 2. 安装 Jotunn 依赖包
     - name: Restore Jotunn Package
       shell: powershell
       run: |
         nuget install JotunnLib -Version 2.30.0 -OutputDirectory packages
 
-    # 3. 执行项目还原与构建
+    # 3. 自动下载公用基础引用文件（BepInEx & Valheim Assemblies）
+    - name: Download Valheim Dependencies
+      shell: powershell
+      run: |
+        New-Item -ItemType Directory -Force -Path "ValheimDummy\valheim_Data\Managed"
+        # 从社区公共源获取公开的 Valheim Assembly 引用库
+        Invoke-WebRequest -Uri "https://github.com/Valheim-Modding/JotunnLib/releases/download/v2.30.0/ValheimReferences.zip" -OutFile "ValheimReferences.zip" -ErrorAction SilentlyContinue
+        if (Test-Path "ValheimReferences.zip") {
+            Expand-Archive -Path "ValheimReferences.zip" -DestinationPath "ValheimDummy\valheim_Data\Managed" -Force
+        }
+
+    # 4. 还原项目依赖并编译
     - name: Restore Project Dependencies
       run: nuget restore XPortal.sln
 
     - name: Build Project
       run: msbuild XPortal.sln /p:Configuration=Release /p:BuildingInsideGitHubActions=true
 
-    # 4. 收集编译生成的 DLL
+    # 5. 打包产物
     - name: Upload DLL Artifact
       uses: actions/upload-artifact@v4
       with:
