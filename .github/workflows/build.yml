@@ -18,6 +18,10 @@ jobs:
     - name: Setup NuGet
       uses: NuGet/setup-nuget@v2
 
+    - name: Setup MSBuild
+      uses: microsoft/setup-msbuild@v2
+
+    # 1. 模拟 Environment.props，避免缺失游戏安装目录导致报错
     - name: Create Dummy Environment.props
       shell: powershell
       run: |
@@ -30,15 +34,20 @@ jobs:
         "@
         $propsContent | Out-File -FilePath "Environment.props" -Encoding utf8
 
-    - name: Restore NuGet Packages
-      run: nuget restore XPortal.sln
+    # 2. 安装并解压 JotunnLib 到项目的 packages 目录下，确保 .props 和 .targets 文件到位
+    - name: Restore Jotunn Package
+      shell: powershell
+      run: |
+        nuget install JotunnLib -Version 2.30.0 -OutputDirectory packages
 
-    - name: Setup MSBuild
-      uses: microsoft/setup-msbuild@v2
+    # 3. 执行项目还原与构建
+    - name: Restore Project Dependencies
+      run: nuget restore XPortal.sln
 
     - name: Build Project
       run: msbuild XPortal.sln /p:Configuration=Release /p:BuildingInsideGitHubActions=true
 
+    # 4. 收集编译生成的 DLL
     - name: Upload DLL Artifact
       uses: actions/upload-artifact@v4
       with:
